@@ -22,10 +22,11 @@
 ##### srun -n 1 -c 20 --mem=100g --account=puzzle -p tier3 --gres=gpu:a100:4 -t 10:0:0 --pty bash
 # python submitit_pretrain.py --model mae_vit_large_patch16 --job_dir logs/submitit --job_name mae --nodes 4
 # python submitit_pretrain.py --model mae_vit_large_patch16 --resume logs/submitit/checkpoint-180.pth --job_dir logs/submitit --job_name mae --nodes 4
-python -m torch.distributed.launch --nproc_per_node=4 main_pretrain.py --resume logs/submitit/checkpoint-180.pth
+python -m torch.distributed.launch --nproc_per_node=2 main_pretrain.py --resume logs/submitit/checkpoint-180.pth
 python -m torch.distributed.launch --nproc_per_node=4 --use_env main_pretrain.py  --world_size 4 --resume logs/submitit/checkpoint-180.pth
 # python submitit_pretrain.py --model mae_vit_large_patch16 --resume logs/checkpoint-200.pth --job_dir logs/submitit --job_name mae --nodes 4
 
+python -m torch.distributed.launch --nproc_per_node=2 main_pretrain_advmask.py 
 
 
 

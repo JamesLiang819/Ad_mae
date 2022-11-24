@@ -267,8 +267,8 @@ def init_distributed_mode(args):
     args.distributed = True
 
     torch.cuda.set_device(args.gpu)
-    # args.dist_backend = 'nccl'
-    args.dist_backend = 'gloo'
+    args.dist_backend = 'nccl'
+    # args.dist_backend = 'gloo'
     print('| distributed init (rank {}): {}, gpu {}'.format(
         args.rank, args.dist_url, args.gpu), flush=True)
     
