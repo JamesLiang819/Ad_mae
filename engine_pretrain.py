@@ -65,7 +65,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         torch.cuda.synchronize()
 
-        metric_logger.update(mask=ratio_value)
+        metric_logger.update(ratio=ratio_value)
 
         metric_logger.update(loss=loss_value)
 
