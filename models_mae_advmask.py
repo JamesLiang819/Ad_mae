@@ -143,27 +143,34 @@ class MaskedAutoencoderViT(nn.Module):
         """
         N, L, D = x.shape  # batch, length, dim
 
-        len_keep = int(L * (1 - mask_ratio))
+        conf_threshold = 0.5
+        # len_keep = int(L * (1 - mask_ratio))
         
-        score = self.mask_embed(x.clone().detach()).squeeze(2)
+        score = torch.sigmoid(self.mask_embed(x.detach()).squeeze(2))
+        score = grad_reverse(score)
+
+        mask_ratio = torch.sum(score < conf_threshold)/N/L # mask confidence at 0.8
 
         # sort noise for each sample
         ids_shuffle = torch.argsort(score, dim=1, descending = True)  # decend: large is keep, small is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
+        len_keep = int(L * (1 - mask_ratio))
+        # print(len_keep)
+
         # keep the first subset
         ids_keep = ids_shuffle[:, :len_keep]
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-        x_masked = grad_reverse(x_masked)
         
         # generate the binary mask: 0 is keep, 1 is remove
         mask = torch.ones([N, L], device=x.device)
         mask[:, :len_keep] = 0
+
         # unshuffle to get the binary mask
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
-        return x_masked, mask, ids_restore
+        # print(1 - len_keep)
+        return x_masked, mask, ids_restore, mask_ratio
 
     def forward_encoder(self, x, mask_ratio):
         # embed patches
@@ -173,7 +180,7 @@ class MaskedAutoencoderViT(nn.Module):
         x = x + self.pos_embed[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.embed_masking(x, mask_ratio) # old: random_masking
+        x, mask, ids_restore, adapt_mask_ratio = self.embed_masking(x, mask_ratio) # old: random_masking
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -185,7 +192,7 @@ class MaskedAutoencoderViT(nn.Module):
             x = blk(x)
         x = self.norm(x)
 
-        return x, mask, ids_restore
+        return x, mask, ids_restore, adapt_mask_ratio
 
     def forward_decoder(self, x, ids_restore):
         # embed tokens
@@ -213,7 +220,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred, mask, mask_ratio, adapt_mask_ratio):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
@@ -229,13 +236,13 @@ class MaskedAutoencoderViT(nn.Module):
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        return loss
+        return loss + 1e-2*(adapt_mask_ratio - mask_ratio)**2
 
     def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+        latent, mask, ids_restore, adapt_mask_ratio = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred, mask)
-        return loss, pred, mask
+        loss = self.forward_loss(imgs, pred, mask, mask_ratio, adapt_mask_ratio)
+        return loss, pred, mask, adapt_mask_ratio
 
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):
