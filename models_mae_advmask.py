@@ -149,10 +149,10 @@ class MaskedAutoencoderViT(nn.Module):
         score = torch.sigmoid(self.mask_embed(x.detach()).squeeze(2))
         score = grad_reverse(score)
 
-        mask_ratio = torch.sum(score < conf_threshold)/N/L # mask confidence at 0.8
+        # mask_ratio = torch.sum(score > conf_threshold)/N/L # mask confidence at 0.8
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(score, dim=1, descending = True)  # decend: large is keep, small is remove
+        ids_shuffle = torch.argsort(score, dim=1, descending = False)  # decend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         len_keep = int(L * (1 - mask_ratio))
